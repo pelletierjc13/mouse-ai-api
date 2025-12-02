@@ -3,6 +3,7 @@ Mouse AI service compatible with frontend format.
 """
 from typing import List
 import logging
+import random
 
 from app.core.utils import is_valid_position, get_adjacent_positions
 from app.services.log_service import log_service
@@ -17,6 +18,7 @@ class MouseAIService:
         """Initialize the AI service with position history tracking for a specific mouse."""
         self.mouse_id = mouse_id
         self.position_history = []  # [previous_positions] for this specific mouse
+        self.last_direction = None
         logger.info(f"- Thread {mouse_id} - Initialized MouseAIService for mouse: {mouse_id}")
     
     def calculate_next_position(
@@ -25,7 +27,8 @@ class MouseAIService:
         current_position: List[int], 
         goal_position: List[int],
         mouse_id: str = "default",
-        available_cheeses: List[List[int]] = None
+        available_cheeses: List[List[int]] = None,
+        algorithm: str = "greedy",
     ) -> List[int]:
         """
         Calculate the next position for the mouse using intelligent algorithm.
@@ -77,8 +80,17 @@ class MouseAIService:
             logger.info(f"- Thread {mouse_id} - Mouse {mouse_id} is already at goal position {goal_position}")
             return current_position
         
-        # Use intelligent pathfinding with back-and-forth avoidance
-        next_position = self._intelligent_move(labyrinth, current_position, goal_position, mouse_id)
+        # NEW: choose algorithm
+        if algorithm == "random":
+            next_position = self._random_move(labyrinth, current_position)
+        elif algorithm == "straight":
+            next_position = self._straight_move(labyrinth, current_position)
+        elif algorithm == "intelligent":
+            # old A* + smart logic
+            next_position = self._intelligent_move(labyrinth, current_position, goal_position, mouse_id)
+        else:
+            # default: greedy
+            next_position = self._greedy_move(labyrinth, current_position, goal_position, mouse_id)
         
         # Update position history
         self._update_position_history(current_position, next_position)
@@ -196,6 +208,70 @@ class MouseAIService:
                         heapq.heappush(open_set, (f_score[neighbor_tuple], neighbor_tuple))
         
         return []  # No path found
+    
+    def _random_move(
+        self,
+        labyrinth: List[List[int]],
+        current_position: List[int],
+    ) -> List[int]:
+        """
+        Algorithm 2: Random movement.
+        Pick any valid adjacent cell at random.
+        """
+        neighbors = [
+            pos for pos in get_adjacent_positions(current_position)
+            if is_valid_position(pos, labyrinth)
+        ]
+        
+        if not neighbors:
+            return current_position
+        
+        return random.choice(neighbors)
+
+    def _straight_move(
+        self,
+        labyrinth: List[List[int]],
+        current_position: List[int],
+    ) -> List[int]:
+        """
+        Algorithm 3: Straight until wall.
+        
+        Behavior:
+        - If we have a previous direction and it is still valid, keep using it.
+        - If blocked or no previous direction, pick a new valid direction
+          (random among up/right/down/left) and save it as last_direction.
+        """
+        x, y = current_position
+        
+        # If we have a direction, try to keep going
+        if self.last_direction is not None:
+            dx, dy = self.last_direction
+            next_pos = [x + dx, y + dy]
+            if is_valid_position(next_pos, labyrinth):
+                return next_pos
+        
+        # Need to choose a new direction
+        directions = [
+            (0, -1),  # up
+            (1, 0),   # right
+            (0, 1),   # down
+            (-1, 0),  # left
+        ]
+        
+        valid_dirs = []
+        for dx, dy in directions:
+            nx, ny = x + dx, y + dy
+            if is_valid_position([nx, ny], labyrinth):
+                valid_dirs.append((dx, dy))
+        
+        if not valid_dirs:
+            # Nowhere to go, stay in place
+            return current_position
+        
+        # Pick a new direction and remember it
+        self.last_direction = random.choice(valid_dirs)
+        dx, dy = self.last_direction
+        return [x + dx, y + dy]
     
     def _greedy_move(
         self, 
