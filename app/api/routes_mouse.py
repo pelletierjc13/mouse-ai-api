@@ -56,6 +56,9 @@ async def get_mouse_move(request: Dict[str, Any]) -> Dict[str, Any]:
         environment = request.get("environment", {})
         mouse_state = request.get("mouseState", {})
         available_moves = request.get("availableMoves", ["north", "south", "east", "west"])
+
+        # NEW: read algorithm from mouseState (default = "greedy")
+        algorithm = mouse_state.get("algorithm", "greedy")
         
         # Extract mouse tag from mouse_state or use mouse_id as fallback
         mouse_tag = mouse_state.get("tag", mouse_id)
@@ -160,7 +163,8 @@ async def get_mouse_move(request: Dict[str, Any]) -> Dict[str, Any]:
             current_position=current_pos,
             goal_position=goal_position,
             mouse_id=mouse_id,
-            available_cheeses=available_cheeses_list
+            available_cheeses=available_cheeses_list,
+            algorithm=algorithm,
         )
         
         # Convert position change to direction
